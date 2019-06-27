@@ -25,6 +25,7 @@ void *msgThreadFunction(void *arg)
     while ( (receive_message = recv(new_socket , client_message , 2000 , 0)) > 0 ) {
         //printf("Socket ID [%d] Says: %s", new_socket, client_message);
         write(new_socket, client_message, sizeof(client_message));
+        //
         memset(client_message, 0, 2000);
     }
     return NULL;
