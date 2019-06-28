@@ -16,14 +16,19 @@
 
 #include <string.h>
 #include <stdbool.h>
-
-#define QUEUE_LENGTH 50
+#include <time.h>
 
 int socket_list[50];
+
+// START QUEUE IMPLEMENTATION
+
+#define QUEUE_LENGTH 50
 
 struct message {
     int socket_id;
     char message[2000];
+    int timestamp;
+    bool pushed;
 };
 
 struct message message_array[QUEUE_LENGTH];
@@ -69,6 +74,8 @@ struct message dequeue() {
     return data;
 }
 
+// END QUEUE IMPLEMENTATION
+
 //Thread Function
 void *reader_thread_function(void *arg)
 {
@@ -79,29 +86,45 @@ void *reader_thread_function(void *arg)
 
     memset(client_message, 0, 2000);
     while ( (receive_message = recv(new_socket , client_message , 2000 , 0)) > 0 ) {
-        printf("Socket ID [%d] Says: %s", new_socket, client_message);
+        //printf("Socket ID [%d] Says: %s", new_socket, client_message);
 
         if ( receive_message <= 0) {
             perror("Error Receiving the Message");
         }
 
+        struct message new_message;
+        strcpy(new_message.message, client_message);
+        new_message.socket_id = new_socket;
+        new_message.timestamp = (int) time(NULL);
+        new_message.pushed = false;
+        enqueue(new_message);
         memset(client_message, 0, 2000);
     }
 
     return NULL;
 }
 
-void *writer_thread_function(void *arg) {
-    printf("New Writer Thread Started!\n");
-    return NULL;
-}
-
 void send_to_all(char message[2000]) {
-    for(int i = 0; i <= (sizeof(socket_list)/sizeof(socket_list[0]) - 1); i++ ) {
+    for (int i = 0; i <= (sizeof(socket_list) / sizeof(socket_list[0]) - 1); i++) {
         send(socket_list[i], message, sizeof(message), 0);
     }
 }
 
+void *writer_thread_function(void *arg) {
+    printf("New Writer Thread Started!\n");
+
+    while (1 == 1) {
+        if (!isEmpty()) {
+            for (int i = front; i <= rear; i++) {
+                if (message_array[i].pushed == false) {
+                    send_to_all(message_array[i].message);
+                    dequeue();
+                }
+            }
+        }
+    }
+
+}
 
 int main () {
 
