@@ -104,9 +104,11 @@ void *reader_thread_function(void *arg)
     return NULL;
 }
 
-void send_to_all(char message[2000]) {
+void send_to_all(char message[2100], int socket_id) {
     for (int i = 0; i <= (sizeof(socket_list) / sizeof(socket_list[0]) - 1); i++) {
-        send(socket_list[i], message, sizeof(message), 0);
+        if (socket_list[i] != socket_id) {
+            send(socket_list[i], message, sizeof(message), 0);
+        }
     }
 }
 
@@ -117,7 +119,10 @@ void *writer_thread_function(void *arg) {
         if (!isEmpty()) {
             for (int i = front; i <= rear; i++) {
                 if (message_array[i].pushed == false) {
-                    send_to_all(message_array[i].message);
+                    char message_with_id[2100];
+                    sprintf(message_with_id, "Socket ID [%d] Says: %s\n", message_array[i].socket_id,
+                            message_array[i].message);
+                    send_to_all(message_with_id, message_array[i].socket_id);
                     dequeue();
                 }
             }
