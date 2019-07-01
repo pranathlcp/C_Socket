@@ -18,10 +18,11 @@
 #include <stdbool.h>
 #include <time.h>
 
+// START SOCKET_LIST ARRAY IMPLEMENTATION
+
 #define SOCKET_LIST_MAX 3
 
 int socket_list[SOCKET_LIST_MAX];
-int socket_list_temp[SOCKET_LIST_MAX];
 int socket_list_item_count = 0;
 
 bool socket_list_isFull() {
@@ -32,57 +33,7 @@ bool socket_list_isEmpty() {
     return socket_list_item_count == 0;
 }
 
-/*
-
-// START SOCKET LIST QUEUE IMPLEMENTATION
-
-#define SOCKET_LIST_MAX 2
-
-int socket_list[SOCKET_LIST_MAX];
-int socket_list_front = 0;
-int socket_list_rear = -1;
-int socket_list_item_count = 0;
-
-int socket_list_front_el() {
-    return socket_list[socket_list_front];
-}
-
-bool socket_list_isEmpty() {
-    return socket_list_item_count == 0;
-}
-
-bool socket_list_isFull() {
-    return socket_list_item_count == SOCKET_LIST_MAX;
-}
-
-int socket_list_size() {
-    return socket_list_item_count;
-}
-
-void socket_list_enqueue(int data) {
-    if(!socket_list_isFull()) {
-        if(socket_list_rear == SOCKET_LIST_MAX - 1) {
-            socket_list_rear = -1;
-        }
-        socket_list[++socket_list_rear] = data;
-        socket_list_item_count++;
-    }
-}
-
-int socket_list_dequeue() {
-    int data = socket_list[socket_list_front++];
-
-    if(socket_list_front == SOCKET_LIST_MAX) {
-        socket_list_front = 0;
-    }
-
-    socket_list_item_count--;
-    return data;
-}
-
-// END SOCKET LIST QUEUE IMPLEMENTATION
-
-*/
+// END SOCKET_LIST ARRAY IMPLEMENTATION
 
 // START QUEUE IMPLEMENTATION
 
@@ -164,9 +115,18 @@ void *reader_thread_function(void *arg)
         enqueue(new_message);
         memset(client_message, 0, 2000);
     }
-    printf("Client Disconnected!!\n");
 
-    socket_list_item_count--;
+    for (int i = 0; i <= socket_list_item_count-1; i++) {
+        if (socket_list[i] == new_socket) {
+            for (int j = i; j <= socket_list_item_count-1; j++) {
+                socket_list[j] = socket_list[j+1];
+                socket_list_item_count--;
+            }
+        }
+    }
+
+    printf("Client Disconnected!\n");
+    printf("Number of sockets: %d\n", socket_list_item_count);
     return NULL;
 }
 
@@ -183,16 +143,10 @@ void *writer_thread_function(void *arg) {
 
     while (true) {
         if (!isEmpty()) {
-//            for (int i = front; i <= rear; i++) {
-//                if (message_array[i].pushed == false) {
-//                    send_to_all(message_array[i].message, message_array[i].socket_id);
-//                    dequeue();
-//                }
-//            }
             send_to_all(message_array[front].message, message_array[front].socket_id);
             dequeue();
         }
-        usleep(10000);
+        usleep(100000);
     }
 
 }
@@ -243,7 +197,7 @@ int main () {
     pthread_t writer_thread_id;
     pthread_create(&writer_thread_id, NULL, writer_thread_function, NULL);
 
-    int i = 0;
+    //int i = 0;
     // Accept incoming connections
     while ( (client_socket = accept(server_socket, NULL, NULL)) > 0 )  {
 
@@ -269,9 +223,9 @@ int main () {
             printf("A client just connected to the server, but the client was disconnected because the queue was full..\n");
         } else {
             printf("New Client Connected\n");
-            socket_list[i] = client_socket;
-            i++;
+            socket_list[socket_list_item_count] = client_socket;
             socket_list_item_count++;
+            printf("Number of sockets: %d\n", socket_list_item_count);
             send(client_socket, server_message, sizeof(server_message), 0);
             pthread_t thread_id;
             pthread_create(&thread_id, NULL, reader_thread_function, &client_socket);
