@@ -4,35 +4,158 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-
 #include <sys/socket.h>
 #include <sys/types.h>
-
 #include <netinet/in.h>
-
 #include <unistd.h>
 #include <string.h>
 #include <pthread.h>
+#include <string.h>
+#include <stdbool.h>
+#include <time.h>
 
-//Thread Function
-void *msgThreadFunction(void *arg)
+bool queue_listener = true;
+
+// START SOCKET_LIST ARRAY IMPLEMENTATION
+
+#define SOCKET_LIST_MAX 10
+int socket_list[SOCKET_LIST_MAX];
+int socket_list_item_count = 0;
+
+bool socket_list_isFull() {
+    return socket_list_item_count == SOCKET_LIST_MAX;
+}
+
+bool socket_list_isEmpty() {
+    return socket_list_item_count == 0;
+}
+
+// END SOCKET_LIST ARRAY IMPLEMENTATION
+
+// START QUEUE IMPLEMENTATION
+
+#define QUEUE_LENGTH 2
+
+struct message {
+    int socket_id;
+    char message[2000];
+    int timestamp;
+    bool pushed;
+};
+
+struct message message_array[QUEUE_LENGTH];
+int front = 0;
+int rear = -1;
+int item_count = 0;
+
+struct message front_el() {
+    return message_array[front];
+}
+
+bool isEmpty() {
+    return item_count == 0;
+}
+
+bool isFull() {
+    return item_count == QUEUE_LENGTH;
+}
+
+int size() {
+    return item_count;
+}
+
+void enqueue(struct message message) {
+    if(!isFull()) {
+        if(rear == QUEUE_LENGTH - 1) {
+            rear = -1;
+        }
+        message_array[++rear] = message;
+        item_count++;
+    }
+}
+
+struct message dequeue() {
+    struct message data = message_array[front++];
+
+    if(front == QUEUE_LENGTH) {
+        front = 0;
+    }
+
+    item_count--;
+    return data;
+}
+
+// END QUEUE IMPLEMENTATION
+
+// START READER THREAD FUNCTION
+void *reader_thread_function(void *arg)
 {
-    printf("New Thread Started!\n");
+    printf("New Reader Thread Started!\n");
     char client_message[2000];
     int new_socket = *((int *)arg);
     int receive_message;
 
+    memset(client_message, 0, 2000);
     while ( (receive_message = recv(new_socket , client_message , 2000 , 0)) > 0 ) {
-        //printf("Socket ID [%d] Says: %s", new_socket, client_message);
-        write(new_socket, client_message, sizeof(client_message));
+
+        if ( receive_message <= 0) {
+            perror("Error Receiving the Message\n");
+        }
+
+        struct message new_message;
+        memset(new_message.message, 0, 2000);
+        strcpy(new_message.message, client_message);
+        new_message.socket_id = new_socket;
+        new_message.timestamp = (int) time(NULL);
+        new_message.pushed = false;
+        enqueue(new_message);
         memset(client_message, 0, 2000);
     }
+
+
+    for (int i = 0; i <= socket_list_item_count-1; i++) {
+        if (socket_list[i] == new_socket) {
+            socket_list_item_count--;
+            for (int j = i; j <= socket_list_item_count-1; j++) {
+                socket_list[j] = socket_list[j+1];
+            }
+        }
+    }
+
+    printf("Client Disconnected!\n");
+    printf("Number of Sockets: %d out of %d\n", socket_list_item_count, SOCKET_LIST_MAX);
     return NULL;
 }
+// END READER THREAD FUNCTION
+
+void send_to_all(char message[2000], int socket_id) {
+    for (int i = 0; i <= (sizeof(socket_list) / sizeof(socket_list[0]) - 1); i++) {
+        if (socket_list[i] != socket_id) {
+            send(socket_list[i], message, sizeof(char)*2000, 0);
+        }
+    }
+}
+
+// START WRITER THREAD FUNCTION
+void *writer_thread_function(void *arg) {
+
+    printf("New Writer Thread Started!\n");
+
+    while (queue_listener) {
+        if (!isEmpty()) {
+            send_to_all(message_array[front].message, message_array[front].socket_id);
+            dequeue();
+        }
+        usleep(100000);
+    }
+
+}
+// END WRITER THREAD FUNCTION
 
 int main () {
 
     int client_socket;
+    int opt = 1;
     char server_message[256] = "You have reached the server\n";
 
     // Create the server socket
@@ -46,6 +169,12 @@ int main () {
         printf("Socket created successfully\n");
     }
 
+    // Forcefully setting port to 9002
+    if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
+        perror ("Error in setsockopt\n");
+        exit(EXIT_FAILURE);
+    }
+
     // Define the Server Address
     struct sockaddr_in server_address;
     server_address.sin_family = AF_INET;
@@ -53,11 +182,10 @@ int main () {
     server_address.sin_addr.s_addr = INADDR_ANY;
 
     // Bind the socket to specified IP and Port
-
     int bind_result = bind(server_socket, (struct sockaddr*) &server_address, sizeof(server_address));
 
     if (bind_result < 0 ) {
-        perror("Binding Error");
+        perror("Binding Error\n");
         return 0;
     }
 
@@ -66,13 +194,26 @@ int main () {
     listen(server_socket, 10);
     printf("Listening for incoming connection\n");
 
+    pthread_t writer_thread_id;
+    pthread_create(&writer_thread_id, NULL, writer_thread_function, NULL);
+
     // Accept incoming connections
     while ( (client_socket = accept(server_socket, NULL, NULL)) > 0 )  {
-        printf("New Client Connected\n");
-        send(client_socket, server_message, sizeof(server_message), 0);
-        pthread_t thread_id;
-        pthread_create(&thread_id, NULL, msgThreadFunction, &client_socket);
-        //pthread_join(thread_id, NULL);
+
+        if(socket_list_isFull()) {
+            char reject_message[150] = "Sorry, chat room is full and you are now disconnected. Please try again later..\n";
+            send(client_socket, reject_message, 150, 0);
+            close(client_socket);
+            printf("A client just connected to the server, but the client was disconnected because the queue was full..\n");
+        } else {
+            printf("New Client Connected\n");
+            socket_list[socket_list_item_count] = client_socket;
+            socket_list_item_count++;
+            printf("Number of Sockets: %d out of %d\n", socket_list_item_count, SOCKET_LIST_MAX);
+            send(client_socket, server_message, sizeof(server_message), 0);
+            pthread_t thread_id;
+            pthread_create(&thread_id, NULL, reader_thread_function, &client_socket);
+        }
     }
 
     close(server_socket);
