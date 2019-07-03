@@ -90,6 +90,7 @@ struct message dequeue() {
 // START READER THREAD FUNCTION
 void *reader_thread_function(void *arg)
 {
+    //
     printf("New Reader Thread Started!\n");
     char client_message[2000];
     int new_socket = *((int *)arg);
