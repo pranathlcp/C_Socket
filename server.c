@@ -97,42 +97,21 @@ void *reader_thread_function(void *arg)
     int new_socket = *((int *)arg);
     int receive_message_size = 0;
     char *buffer = NULL;
-    buffer = malloc(2000*sizeof(char));
-    int bytes_read = 0;
-
-    //printf("\nPointer of Bytes Read: %p\n", &bytes_read);
-    //printf("Pointer of Buffer: %p\n\n", &buffer);
-
-//    memset(client_message, 0, 2000);
+    buffer = malloc(2000*sizeof(char));;
 
     while ( (receive_message_size = recv(new_socket , buffer , 2000*sizeof(char) , 0)) > 0 ) {
-
-        //printf("\nPointer of Bytes Read: %p\n", &bytes_read);
-        //printf("Pointer of Buffer: %p\n\n", &buffer);
 
         if ( receive_message_size <= 0 ) {
             perror("Error Receiving the Message\n");
         }
-
-        //bytes_read += receive_message_size;
-        //buffer = realloc(buffer, 2000 + bytes_read);
-
-
-//        printf("Message on struct initialization: %s\n", new_message.message);
-
-        //memset(new_message.message, 0, sizeof(new_message.message));
-        //printf("Struct Message after Memset to Zero: %s\n", new_message.message);
 
         printf("Buffer Message: %s\n", buffer);
         struct message new_message = MESSAGE_INITIALIZER;
         printf("receive_message_size=%d\n",receive_message_size);
         new_message.message = malloc(receive_message_size + 1);
         strcpy(new_message.message, buffer);
-//        new_message.message[receive_message_size] = 0;
-        printf("strlen(new_message.message)=%d\n",(int)strlen(new_message.message));
 
-        //memcpy(new_message.message, (char *)buffer + bytes_read, sizeof(buffer) + 1);
-        //strcpy(new_message.message, buffer);
+        printf("strlen(new_message.message)=%d\n",(int)strlen(new_message.message));
         printf("Struct Message after Memcpy: %s", new_message.message);
 
         new_message.socket_id = new_socket;
@@ -140,13 +119,9 @@ void *reader_thread_function(void *arg)
         new_message.pushed = false;
         enqueue(new_message);
 
-        //printf("Socket ID [%d] sent a message at %d\n", new_message.socket_id, new_message.timestamp);
-        //memset(buffer, 0, sizeof(*buffer));
         buffer = calloc(2000, sizeof(char));
-        //new_message.message = calloc(receive_message_size + 1, sizeof(char));
 
     }
-
 
     for (int i = 0; i <= socket_list_item_count-1; i++) {
         if (socket_list[i] == new_socket) {
@@ -168,9 +143,7 @@ void *reader_thread_function(void *arg)
 void send_to_all(char *message, int socket_id) {
     for (int i = 0; i <= (sizeof(socket_list) / sizeof(socket_list[0]) - 1); i++) {
         if (socket_list[i] != socket_id) {
-            //char message_with_id[2500];
-            //snprintf(message_with_id, sizeof(message_with_id), "ID[%d] Says: %s", socket_id, message_with_id);
-            send(socket_list[i], message, sizeof(char)*2000, 0);
+            send(socket_list[i], message, strlen(message), 0);
         }
     }
 }
@@ -179,7 +152,6 @@ void send_to_all(char *message, int socket_id) {
 void *writer_thread_function(void *arg) {
 
     printf("New Writer Thread Started!\n");
-
 
     while (queue_listener) {
         if (!isEmpty()) {
