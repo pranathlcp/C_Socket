@@ -13,6 +13,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <time.h>
+#include <inttypes.h>
 
 bool queue_listener = true;
 
@@ -94,41 +95,100 @@ void *reader_thread_function(void *arg)
 {
     printf("New Reader Thread Started!\n");
 
+
     int new_socket = *((int *)arg);
     int receive_message_size = 0;
-    char *buffer = NULL;
-    buffer = malloc(6*sizeof(char));
 
-    while ( (receive_message_size = recv(new_socket , buffer , 6*sizeof(char) , 0)) > 0 ) {
+    char msg_size_buffer[5];
+
+    while ( (receive_message_size = recv(new_socket , msg_size_buffer , sizeof(msg_size_buffer) , 0)) > 0 ) {
 
         if ( receive_message_size <= 0 ) {
             perror("Error Receiving the Message\n");
         }
 
-//        int a[5];
-//        char* c = "00150";
-//        memcpy(a, buffer, sizeof a );
-//        printf("\nBuff: %d\n", *a);
+        int msg_size[5]={msg_size_buffer[0] - '0', msg_size_buffer[1] - '0', msg_size_buffer[2] - '0', msg_size_buffer[3] - '0', msg_size_buffer[4] - '0'};
+        char msg_size_str[5];
+//        sprintf(msg_size_str, "%d%d%d%d%d", msg_size[0],msg_size[1],msg_size[2],msg_size[3],msg_size[4]);
+        int i=0;
+        int index = 0;
+        for (i=0; i<5; i++) {
+            index += snprintf(&msg_size_str[index], 6-index, "%d", msg_size[i]);
+            printf("Index: %d\nMessage Size String: %c\n", index, msg_size_str[i]);
+        }
 
-        buffer[receive_message_size] = '\0';
-        printf("Buffer Message: %s\n", buffer);
+        memset(msg_size_buffer, 0, 5);
+
+        char* strtoumax_endptr;
+        int msg_size_int = strtoumax(msg_size_str, &strtoumax_endptr, 10);
+        printf("\n\n"
+               "INT: %d\n", msg_size_int);
+
+        char *buffer = NULL;
+        buffer = malloc(msg_size_int*sizeof(char) + 1);
+        printf("Size of Buffer: %ld\n", msg_size_int*sizeof(char));
+
+        int receive_message_content_size = recv(new_socket, buffer, (msg_size_int + 2)*sizeof(char), 0);
+
+        if (receive_message_content_size <= 0) {
+            perror("Error with message");
+        }
+
         struct message new_message = MESSAGE_INITIALIZER;
-        printf("receive_message_size=%d\n",receive_message_size);
+//        printf("receive_message_size=%d\n",receive_message_size);
 
         new_message.message = malloc(receive_message_size + 1);
         strcpy(new_message.message, buffer);
 
-        printf("strlen(new_message.message)=%d\n",(int)strlen(new_message.message));
-        printf("Struct Message after Memcpy: %s", new_message.message);
+//        printf("strlen(new_message.message)=%d\n",(int)strlen(new_message.message));
+//        printf("Struct Message after Memcpy: %s", new_message.message);
 
         new_message.socket_id = new_socket;
         new_message.timestamp = (int) time(NULL);
         new_message.pushed = false;
         enqueue(new_message);
 
-        buffer = calloc(6, sizeof(char));
+        free(buffer);
+        //buffer = calloc(6, sizeof(char));
 
     }
+
+
+//    int new_socket = *((int *)arg);
+//    int receive_message_size = 0;
+//    char *buffer = NULL;
+//    buffer = malloc(6*sizeof(char));
+//
+//    while ( (receive_message_size = recv(new_socket , buffer , 6*sizeof(char) , 0)) > 0 ) {
+//
+//        if ( receive_message_size <= 0 ) {
+//            perror("Error Receiving the Message\n");
+//        }
+//
+//        int a[5];
+//        char* c = "00150";
+//        memcpy(a, buffer, sizeof a );
+//        printf("\nBuff: %d\n", *a);
+//
+//        buffer[receive_message_size] = '\0';
+//        printf("Buffer Message: %s\n", buffer);
+//        struct message new_message = MESSAGE_INITIALIZER;
+//        printf("receive_message_size=%d\n",receive_message_size);
+//
+//        new_message.message = malloc(receive_message_size + 1);
+//        strcpy(new_message.message, buffer);
+//
+//        printf("strlen(new_message.message)=%d\n",(int)strlen(new_message.message));
+//        printf("Struct Message after Memcpy: %s", new_message.message);
+//
+//        new_message.socket_id = new_socket;
+//        new_message.timestamp = (int) time(NULL);
+//        new_message.pushed = false;
+//        enqueue(new_message);
+//
+//        buffer = calloc(6, sizeof(char));
+//
+//    }
 
     for (int i = 0; i <= socket_list_item_count-1; i++) {
         if (socket_list[i] == new_socket) {
@@ -139,7 +199,7 @@ void *reader_thread_function(void *arg)
         }
     }
 
-    free(buffer);
+    //free(buffer);
 
     printf("Client Disconnected!\n");
     printf("Number of Sockets: %d out of %d\n", socket_list_item_count, SOCKET_LIST_MAX);
