@@ -97,17 +97,24 @@ void *reader_thread_function(void *arg)
     int new_socket = *((int *)arg);
     int receive_message_size = 0;
     char *buffer = NULL;
-    buffer = malloc(2000*sizeof(char));;
+    buffer = malloc(6*sizeof(char));
 
-    while ( (receive_message_size = recv(new_socket , buffer , 2000*sizeof(char) , 0)) > 0 ) {
+    while ( (receive_message_size = recv(new_socket , buffer , 6*sizeof(char) , 0)) > 0 ) {
 
         if ( receive_message_size <= 0 ) {
             perror("Error Receiving the Message\n");
         }
 
+//        int a[5];
+//        char* c = "00150";
+//        memcpy(a, buffer, sizeof a );
+//        printf("\nBuff: %d\n", *a);
+
+        buffer[receive_message_size] = '\0';
         printf("Buffer Message: %s\n", buffer);
         struct message new_message = MESSAGE_INITIALIZER;
         printf("receive_message_size=%d\n",receive_message_size);
+
         new_message.message = malloc(receive_message_size + 1);
         strcpy(new_message.message, buffer);
 
@@ -119,7 +126,7 @@ void *reader_thread_function(void *arg)
         new_message.pushed = false;
         enqueue(new_message);
 
-        buffer = calloc(2000, sizeof(char));
+        buffer = calloc(6, sizeof(char));
 
     }
 
