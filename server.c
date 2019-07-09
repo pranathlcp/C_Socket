@@ -13,6 +13,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <time.h>
+#include <inttypes.h>
 
 bool queue_listener = true;
 
@@ -38,10 +39,12 @@ bool socket_list_isEmpty() {
 
 struct message {
     int socket_id;
-    char message[2000];
+    char *message;
     int timestamp;
     bool pushed;
 };
+
+#define MESSAGE_INITIALIZER     {-1,NULL,0,false};
 
 struct message message_array[QUEUE_LENGTH];
 int front = 0;
@@ -91,27 +94,59 @@ struct message dequeue() {
 void *reader_thread_function(void *arg)
 {
     printf("New Reader Thread Started!\n");
-    char client_message[2000];
+
+
     int new_socket = *((int *)arg);
-    int receive_message;
+    int receive_message_size = 0;
 
-    memset(client_message, 0, 2000);
-    while ( (receive_message = recv(new_socket , client_message , 2000 , 0)) > 0 ) {
+    char msg_size_buffer[5];
 
-        if ( receive_message <= 0) {
+    while ( (receive_message_size = recv(new_socket , msg_size_buffer , sizeof(msg_size_buffer) , 0)) > 0 ) {
+
+        if ( receive_message_size <= 0 ) {
             perror("Error Receiving the Message\n");
         }
 
-        struct message new_message;
-        memset(new_message.message, 0, 2000);
-        strcpy(new_message.message, client_message);
+        int msg_size[5]={msg_size_buffer[0] - '0', msg_size_buffer[1] - '0', msg_size_buffer[2] - '0', msg_size_buffer[3] - '0', msg_size_buffer[4] - '0'};
+        char msg_size_str[5];
+        int i=0;
+        int index = 0;
+        for (i=0; i<5; i++) {
+            index += snprintf(&msg_size_str[index], 6-index, "%d", msg_size[i]);
+        }
+
+        memset(msg_size_buffer, 0, 5);
+
+        char* strtoumax_endptr;
+        int msg_size_int = strtoumax(msg_size_str, &strtoumax_endptr, 10);
+
+        char *buffer = NULL;
+        buffer = malloc(msg_size_int*sizeof(char) + 1);
+        printf("Size of Buffer: %ld\n", (msg_size_int + 2)*sizeof(char));
+
+        int receive_message_content_size = recv(new_socket, buffer, (msg_size_int + 2)*sizeof(char), 0);
+
+        if (receive_message_content_size <= 0) {
+            perror("Error with message");
+        }
+
+        printf("%s\n", buffer);
+
+        struct message new_message = MESSAGE_INITIALIZER;
+
+        new_message.message = malloc(receive_message_size + 50 + 1);
+        sprintf(new_message.message, "Socket ID[%d] Says: ", new_socket);
+
+        strcat(new_message.message, buffer);
+//        strcpy(new_message.message, buffer);
+
         new_message.socket_id = new_socket;
         new_message.timestamp = (int) time(NULL);
         new_message.pushed = false;
         enqueue(new_message);
-        memset(client_message, 0, 2000);
-    }
 
+        free(buffer);
+    }
 
     for (int i = 0; i <= socket_list_item_count-1; i++) {
         if (socket_list[i] == new_socket) {
@@ -122,19 +157,36 @@ void *reader_thread_function(void *arg)
         }
     }
 
+    //free(buffer);
+
     printf("Client Disconnected!\n");
     printf("Number of Sockets: %d out of %d\n", socket_list_item_count, SOCKET_LIST_MAX);
     return NULL;
 }
 // END READER THREAD FUNCTION
 
-void send_to_all(char message[2000], int socket_id) {
+void send_to_all(char *message, int socket_id) {
     for (int i = 0; i <= (sizeof(socket_list) / sizeof(socket_list[0]) - 1); i++) {
         if (socket_list[i] != socket_id) {
-            send(socket_list[i], message, sizeof(char)*2000, 0);
+            send(socket_list[i], message, strlen(message), 0);
         }
     }
+//    free(message);
 }
+
+/*void send_to_all(char *message, int socket_id) {
+    char *msg_with_id;
+    strcpy(msg_with_id, "LALALA");
+    malloc(strlen(message) + 50);
+    strcat(msg_with_id, message);
+    for (int i = 0; i <= (sizeof(socket_list) / sizeof(socket_list[0]) - 1); i++) {
+        if (socket_list[i] != socket_id) {
+            send(socket_list[i], msg_with_id, strlen(msg_with_id), 0);
+        }
+    }
+   free(msg_with_id);
+}
+ */
 
 // START WRITER THREAD FUNCTION
 void *writer_thread_function(void *arg) {
@@ -144,6 +196,7 @@ void *writer_thread_function(void *arg) {
     while (queue_listener) {
         if (!isEmpty()) {
             send_to_all(message_array[front].message, message_array[front].socket_id);
+            free(message_array[front].message);
             dequeue();
         }
         usleep(100000);
