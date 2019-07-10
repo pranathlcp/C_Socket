@@ -115,16 +115,16 @@ void *reader_thread_function(void *arg)
             index += snprintf(&msg_size_str[index], 6-index, "%d", msg_size[i]);
         }
 
-        memset(msg_size_buffer, 0, 5);
+//        memset(msg_size_buffer, 0, 5);
 
         char* strtoumax_endptr;
         int msg_size_int = strtoumax(msg_size_str, &strtoumax_endptr, 10);
 
         char *buffer = NULL;
-        buffer = malloc(msg_size_int*sizeof(char) + 1);
+        buffer = malloc( (msg_size_int + 5)*sizeof(char) + 1);
         printf("Size of Buffer: %ld\n", (msg_size_int + 2)*sizeof(char));
 
-        int receive_message_content_size = recv(new_socket, buffer, (msg_size_int + 2)*sizeof(char), 0);
+        int receive_message_content_size = recv(new_socket, buffer, (msg_size_int + 5 + 2)*sizeof(char), 0);
 
         if (receive_message_content_size <= 0) {
             perror("Error with message");
@@ -134,10 +134,11 @@ void *reader_thread_function(void *arg)
 
         struct message new_message = MESSAGE_INITIALIZER;
 
-        new_message.message = malloc(receive_message_size + 50 + 1);
-        sprintf(new_message.message, "Socket ID[%d] Says: ", new_socket);
+        new_message.message = malloc(receive_message_size + 20 + 1);
+        sprintf(new_message.message, "%sSocket ID[%d] Says: ", msg_size_str, new_socket);
 
         strcat(new_message.message, buffer);
+        printf("\n\nNew Message.Message: %s\n\n", new_message.message);
 //        strcpy(new_message.message, buffer);
 
         new_message.socket_id = new_socket;
@@ -145,6 +146,7 @@ void *reader_thread_function(void *arg)
         new_message.pushed = false;
         enqueue(new_message);
 
+        memset(msg_size_buffer, 0, 5);
         free(buffer);
     }
 
@@ -263,7 +265,7 @@ int main () {
             socket_list[socket_list_item_count] = client_socket;
             socket_list_item_count++;
             printf("Number of Sockets: %d out of %d\n", socket_list_item_count, SOCKET_LIST_MAX);
-            send(client_socket, server_message, sizeof(server_message), 0);
+//            send(client_socket, server_message, sizeof(server_message), 0);
             pthread_t thread_id;
             pthread_create(&thread_id, NULL, reader_thread_function, &client_socket);
         }
