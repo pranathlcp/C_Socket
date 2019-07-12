@@ -19,7 +19,7 @@ bool queue_listener = true;
 
 // START SOCKET_LIST ARRAY IMPLEMENTATION
 
-#define SOCKET_LIST_MAX 10
+#define SOCKET_LIST_MAX 1
 int socket_list[SOCKET_LIST_MAX];
 int socket_list_item_count = 0;
 
@@ -121,24 +121,21 @@ void *reader_thread_function(void *arg)
         int msg_size_int = strtoumax(msg_size_str, &strtoumax_endptr, 10);
 
         char *buffer = NULL;
-        buffer = malloc( (msg_size_int + 5)*sizeof(char) + 1);
+        buffer = malloc( (msg_size_int + 2)*sizeof(char) + 1);
         printf("Size of Buffer: %ld\n", (msg_size_int + 2)*sizeof(char));
 
-        int receive_message_content_size = recv(new_socket, buffer, (msg_size_int + 5 + 2)*sizeof(char), 0);
+        int receive_message_content_size = recv(new_socket, buffer, (msg_size_int + 2)*sizeof(char), 0);
 
         if (receive_message_content_size <= 0) {
             perror("Error with message");
         }
 
-        printf("%s\n", buffer);
-
         struct message new_message = MESSAGE_INITIALIZER;
 
-        new_message.message = malloc(receive_message_size + 20 + 1);
+        new_message.message = malloc((msg_size_int + 2)*sizeof(char) + 27);
         sprintf(new_message.message, "%sSocket ID[%d] Says: ", msg_size_str, new_socket);
 
         strcat(new_message.message, buffer);
-        printf("\n\nNew Message.Message: %s\n\n", new_message.message);
 //        strcpy(new_message.message, buffer);
 
         new_message.socket_id = new_socket;
@@ -161,7 +158,7 @@ void *reader_thread_function(void *arg)
 
     //free(buffer);
 
-    printf("Client Disconnected!\n");
+    printf("\n*****************************************\n   Client Disconnected [Socket ID: %d]!   \n*****************************************\n\n", new_socket);
     printf("Number of Sockets: %d out of %d\n", socket_list_item_count, SOCKET_LIST_MAX);
     return NULL;
 }
@@ -173,22 +170,9 @@ void send_to_all(char *message, int socket_id) {
             send(socket_list[i], message, strlen(message), 0);
         }
     }
-//    free(message);
+    free(message);
 }
 
-/*void send_to_all(char *message, int socket_id) {
-    char *msg_with_id;
-    strcpy(msg_with_id, "LALALA");
-    malloc(strlen(message) + 50);
-    strcat(msg_with_id, message);
-    for (int i = 0; i <= (sizeof(socket_list) / sizeof(socket_list[0]) - 1); i++) {
-        if (socket_list[i] != socket_id) {
-            send(socket_list[i], msg_with_id, strlen(msg_with_id), 0);
-        }
-    }
-   free(msg_with_id);
-}
- */
 
 // START WRITER THREAD FUNCTION
 void *writer_thread_function(void *arg) {
@@ -198,7 +182,7 @@ void *writer_thread_function(void *arg) {
     while (queue_listener) {
         if (!isEmpty()) {
             send_to_all(message_array[front].message, message_array[front].socket_id);
-            free(message_array[front].message);
+//            free(message_array[front].message);
             dequeue();
         }
         usleep(100000);
@@ -256,12 +240,12 @@ int main () {
     while ( (client_socket = accept(server_socket, NULL, NULL)) > 0 )  {
 
         if(socket_list_isFull()) {
-            char reject_message[150] = "Sorry, chat room is full and you are now disconnected. Please try again later..\n";
+            char reject_message[150] = "00150Sorry! Chat room is full and you are now disconnected. Please try again later...\n";
             send(client_socket, reject_message, 150, 0);
             close(client_socket);
             printf("A client just connected to the server, but the client was disconnected because the queue was full..\n");
         } else {
-            printf("New Client Connected\n");
+            printf("\n******************************************\n   New Client Connected [Socket ID: %d]  \n******************************************\n\n", client_socket);
             socket_list[socket_list_item_count] = client_socket;
             socket_list_item_count++;
             printf("Number of Sockets: %d out of %d\n", socket_list_item_count, SOCKET_LIST_MAX);
